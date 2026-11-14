@@ -49,10 +49,33 @@ class ApplicationTests(unittest.TestCase):
                 self.assertIn(marker, response.read().decode())
 
     def test_bad_filter_and_unknown_resource(self):
-        for path, code in [('/api/view?cutoff=1.5', 400), ('/api/view?extra=1', 400), ('/api/view?group=missing', 400), ('/api/analyses/missing', 404), ('/api/source?table=missing', 404)]:
+        for path, code in [('/api/view?cutoff=1.5', 400), ('/api/view?extra=1', 400), ('/api/view?group=missing', 400), ('/api/analyses/missing', 404), ('/api/source?table=missing', 404), ('/api/view?window=0', 400), ('/api/view?window=abc', 400), ('/api/view?capacity=0', 400), ('/api/view?exclude_public=maybe', 400)]:
             with self.assertRaises(HTTPError) as caught:
                 self.get(path)
             self.assertEqual(caught.exception.code, code)
+
+    def test_link_options_roundtrip_and_saved_analysis(self):
+        link = self.get('/api/view?window=60&capacity=3&exclude_public=false')
+        self.assertEqual(link['options'], {'cutoff': 90, 'group': '', 'window': 60, 'exclude_public': False, 'capacity': 3})
+        self.assertEqual(link['result']['evaluation']['capacity'], 3)
+        self.assertIn('leads', link['result'])
+        self.assertIn('correction', link['result'])
+        request = Request(self.base + '/api/analyses', data=json.dumps({'title': '关联复核', 'options': link['options']}).encode(), headers={'Content-Type': 'application/json'})
+        with urlopen(request) as response:
+            saved = json.load(response)
+        restored = self.get('/api/analyses/' + saved['id'])
+        self.assertEqual(restored['result'], link['result'])
+        self.assertEqual(restored['options'], link['options'])
+
+    def test_default_view_has_leads_and_evaluation(self):
+        view = self.get('/api/view')['result']
+        self.assertTrue(view['leads'])
+        self.assertTrue(view['evaluation']['method'])
+        self.assertIn('selection_bias', view['evaluation'])
+        lead = view['leads'][0]
+        for key in ['lead_id', 'claims', 'evidence', 'score_parts', 'outcome', 'correction']:
+            self.assertIn(key, lead)
+        self.assertEqual([item['rank'] for item in view['leads']], list(range(1, len(view['leads']) + 1)))
 
     def test_source_is_same_generation(self):
         catalog = self.get('/api/catalog')

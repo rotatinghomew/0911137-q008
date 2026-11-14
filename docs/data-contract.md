@@ -1,6 +1,6 @@
 # 资料口径
 
-claims 是本地虚构费用单，amount 为元。relations 中 evidence_id 指原始凭证，同证据的多条边相关；valid_from/valid_to 是半开有效期，recorded_at 是更正可见时刻。payees 的 public_service=true 说明可被很多员工合法共享。reviews 只有被抽中的案件，dismissed 不等于所有邻接记录均正常。现有台提供单笔金额列表和邻接关系浏览。
+claims 是本地虚构费用单，amount 为元。relations 中 evidence_id 指原始凭证，同证据的多条边相关；valid_from/valid_to 是半开有效期，recorded_at 是更正可见时刻。payees 的 public_service=true 说明可被很多员工合法共享。reviews 只有被抽中的案件，dismissed 不等于所有邻接记录均正常。关联线索的形成、独立证据去重、排序与反馈口径见 `link-review.md`。
 
 ## 现有资料
 

@@ -2,17 +2,45 @@ import argparse
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
 import os
 from pathlib import Path
 import threading
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
-from .domain import run
+from .domain import DEFAULT_CAPACITY, DEFAULT_EXCLUDE_PUBLIC, DEFAULT_WINDOW, run
 from .storage import AnalysisStore, read_dataset
 
 
 ROOT = Path(__file__).resolve().parents[1]
+OPTION_NAMES = {'cutoff', 'group', 'window', 'exclude_public', 'capacity'}
+
+
+def as_integer(value, label):
+    try:
+        if isinstance(value, bool):
+            raise ValueError()
+        if isinstance(value, str):
+            if not value.strip() or not value.strip().lstrip('+-').isdigit():
+                raise ValueError()
+            return int(value.strip())
+        if isinstance(value, int):
+            return value
+        converted = float(value)
+        if not math.isfinite(converted) or converted != int(converted):
+            raise ValueError()
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f'{label}须为整数') from None
+    return int(converted)
+
+
+def as_boolean(value, label):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value in {'true', 'false'}:
+        return value == 'true'
+    raise ValueError(f'{label}须为 true 或 false')
 
 
 class Application:
@@ -23,27 +51,34 @@ class Application:
 
     def catalog(self):
         data, digest = read_dataset(self.dataset)
-        return {**data['meta'], 'digest': digest, 'tables': {name: len(rows) for name, rows in data['tables'].items()}}
+        return {
+            **data['meta'],
+            'digest': digest,
+            'tables': {name: len(rows) for name, rows in data['tables'].items()},
+            'link_defaults': {'window': DEFAULT_WINDOW, 'exclude_public': DEFAULT_EXCLUDE_PUBLIC, 'capacity': DEFAULT_CAPACITY},
+        }
 
     def analyze(self, supplied):
-        if not isinstance(supplied, dict) or set(supplied) - {'cutoff', 'group'}:
-            raise ValueError('只接受 cutoff 和 group 筛选项')
+        if not isinstance(supplied, dict) or set(supplied) - OPTION_NAMES:
+            raise ValueError('只接受 cutoff、group、window、exclude_public 和 capacity 筛选项')
         data, digest = read_dataset(self.dataset)
-        cutoff = supplied.get('cutoff', data['meta']['default_cutoff'])
-        try:
-            if isinstance(cutoff, bool) or float(cutoff) != int(cutoff):
-                raise ValueError()
-            cutoff = int(cutoff)
-        except (TypeError, ValueError, OverflowError):
-            raise ValueError('分析时点须为整数') from None
+        cutoff = as_integer(supplied.get('cutoff', data['meta']['default_cutoff']), '分析时点')
         group = supplied.get('group', '')
         if not isinstance(group, str) or group not in ['', *data['meta']['groups']]:
             raise ValueError('未知分析范围')
         if not data['meta']['min_cutoff'] <= cutoff <= data['meta']['max_cutoff']:
             raise ValueError('分析时点超出资料范围')
-        options = {'cutoff': cutoff, 'group': group}
+        window = as_integer(supplied.get('window', DEFAULT_WINDOW), '关联时窗')
+        if not 1 <= window <= 365:
+            raise ValueError('关联时窗须在一到三百六十五之间')
+        capacity = as_integer(supplied.get('capacity', DEFAULT_CAPACITY), '批次容量')
+        if not 1 <= capacity <= 1000:
+            raise ValueError('批次容量须在一到一千之间')
+        exclude_public = as_boolean(supplied.get('exclude_public', DEFAULT_EXCLUDE_PUBLIC), '公共服务商排除开关')
+        options = {'cutoff': cutoff, 'group': group, 'window': window, 'exclude_public': exclude_public, 'capacity': capacity}
         result = run(data['tables'], options)
         return {'digest': digest, 'options': options, 'result': result}
+
 
 
 class Handler(BaseHTTPRequestHandler):

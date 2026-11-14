@@ -19,7 +19,7 @@
 
 ### `relations`
 
-字段：`employee`、`evidence_id`、`payee`、`recorded_at`、`relation`、`valid_from`、`valid_to`。
+字段：`employee`、`evidence_id`、`payee`、`recorded_at`、`relation`、`valid_from`、`valid_to`。同一 `relation` 可有多条修订，`recorded_at` 决定该修订何时对分析可见；页面按 `evidence_id` 合并同一凭证的多条边。
 
 ```json
 {

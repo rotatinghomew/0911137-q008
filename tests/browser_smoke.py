@@ -38,6 +38,15 @@ def main():
                 page.goto(base)
                 page.wait_for_function("document.querySelector('#status').textContent === '分析已更新'")
                 assert page.locator('#results tbody tr').count() > 0
+                page.locator('#leads tbody tr').first.click()
+                page.wait_for_selector('#lead-detail:not([hidden])')
+                assert page.locator('#lead-detail table').count() >= 3
+                assert page.get_by_text('收起', exact=True).count() == 1
+                page.get_by_role('button', name='收起', exact=True).click()
+                assert page.locator('#lead-detail[hidden]').count() == 1
+                page.get_by_text('关系更正与重算').scroll_into_view_if_needed()
+                assert page.locator('#correction').inner_text().strip() != ''
+                assert '下一批线索' in page.locator('#evaluation-points').evaluate('node => node.parentElement.innerText')
                 page.locator('#filters select').select_option(catalog['groups'][0])
                 page.get_by_role('button', name='更新分析', exact=True).click()
                 page.wait_for_function("document.querySelector('#status').textContent === '分析已更新'")
